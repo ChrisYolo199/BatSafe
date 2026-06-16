@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zero-Knowledge Password Vault</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #e0e0e0; padding: 20px; margin: 0; }
+        .app-container { max-width: 700px; margin: 40px auto; background: #1e1e1e; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        input, button, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 4px; border: 1px solid #333; box-sizing: border-box; }
+        input, select { background: #2a2a2a; color: #fff; }
+        button { background: #007acc; color: white; cursor: pointer; font-weight: bold; border: none; }
+        button:hover { background: #005999; }
+        .hidden { display: none !important; }
+        .vault-item { background: #2d2d2d; padding: 15px; margin: 10px 0; border-radius: 4px; border-left: 4px solid #007acc; }
+        pre { background: #000; padding: 10px; color: #00ff00; border-radius: 4px; font-size: 12px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div id="authScreen">
+        <h2>Secure Vault Gateway</h2>
+        <p style="color: #aaa;">All cryptographic processes happen locally in your browser.</p>
+        
+        <label for="email">Email Address:</label>
+        <input type="email" id="email" placeholder="you@domain.com">
+
+        <label for="masterPassword">Master Password:</label>
+        <input type="password" id="masterPassword" placeholder="••••••••••••">
+
+        <button id="btnUnlock">Unlock Local Vault</button>
+    </div>
+
+    <div id="vaultScreen" class="hidden">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Your Secure Vault</h2>
+            <button id="btnLockApp" style="width: auto; padding: 8px 15px; background: #d9534f;">Lock Vault</button>
+        </div>
+        
+        <hr style="border-color: #333;">
+
+        <h3>Add New Password Item</h3>
+        <input type="text" id="siteName" placeholder="Site Name (e.g., Google, GitHub)">
+        <input type="text" id="siteUsername" placeholder="Username / Email">
+        <input type="password" id="sitePassword" placeholder="Account Password">
+        <button id="btnAddItem">Encrypt & Add to View</button>
+
+        <hr style="border-color: #333; margin: 20px 0;">
+
+        <h3>Your Synchronized Credentials</h3>
+        <div id="encryptedVaultDisplay">No items stored yet.</div>
+    </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
