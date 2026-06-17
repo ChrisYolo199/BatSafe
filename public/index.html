@@ -3,53 +3,343 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zero-Knowledge Password Vault</title>
+    <title>BatSafe Password Vault</title>
     <style>
-        body { font-family: sans-serif; background: #121212; color: #e0e0e0; padding: 20px; margin: 0; }
-        .app-container { max-width: 700px; margin: 40px auto; background: #1e1e1e; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        input, button, select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 4px; border: 1px solid #333; box-sizing: border-box; }
-        input, select { background: #2a2a2a; color: #fff; }
-        button { background: #007acc; color: white; cursor: pointer; font-weight: bold; border: none; }
-        button:hover { background: #005999; }
+        body { 
+            font-family: sans-serif; 
+            /* Dark slate fallback color instead of solid black if the image takes a second to load */
+            background-color: #1a1b26; 
+            margin: 0; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh; 
+            box-sizing: border-box;
+        }
+        
+        .app-container { 
+            width: 100%;
+            max-width: 780px; 
+            background: rgba(30, 31, 38, 0.82); 
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            padding: 35px 40px; 
+            border-radius: 20px; 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.7); 
+            box-sizing: border-box;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .auth-box-size {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        h2 {
+            margin: 0 0 25px 0;
+            text-align: center; 
+            font-size: 1.8em;
+            color: #ffffff;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        h3 {
+            margin: 0 0 15px 0;
+            font-size: 1.15em;
+            color: #ffffff;
+            font-weight: 500;
+        }
+        
+        .vertical-form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 18px; 
+            margin-top: 10px;
+        }
+
+        .input-wrapper {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-size: 0.85em;
+            margin-bottom: 6px;
+            color: #b0b3b8;
+        }
+
+        input { 
+            width: 100%; 
+            padding: 11px 14px; 
+            border-radius: 8px; 
+            border: 1px solid #c9a435; 
+            background: rgba(0, 0, 0, 0.4);
+            color: #fff; 
+            box-sizing: border-box; 
+            font-size: 0.95em;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        
+        input:focus {
+            border-color: #ffd700;
+            outline: none;
+            box-shadow: 0 0 8px rgba(201, 164, 53, 0.3);
+        }
+        
+        /* Main UI Buttons: Yellow with White Text */
+        button { 
+            background: #c9a435; 
+            color: #ffffff; 
+            cursor: pointer; 
+            font-weight: bold; 
+            border: none;
+            padding: 11px 20px;
+            border-radius: 6px;
+            font-size: 0.95em;
+            transition: background 0.2s;
+        }
+        
+        button:hover { 
+            background: #e1b93c; 
+        }
+        
+        .link-btn {
+            color: #c9a435; 
+            font-size: 0.95em; 
+            text-decoration: underline; 
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            margin: 0;
+            width: auto;
+            text-align: left;
+        }
+        .link-btn:hover {
+            color: #e1b93c;
+        }
+        
         .hidden { display: none !important; }
-        .vault-item { background: #2d2d2d; padding: 15px; margin: 10px 0; border-radius: 4px; border-left: 4px solid #007acc; }
-        pre { background: #000; padding: 10px; color: #00ff00; border-radius: 4px; font-size: 12px; overflow-x: auto; }
+
+        /* Split Dashboard Layout */
+        .vault-dashboard-layout {
+            display: flex;
+            gap: 40px;
+            margin-bottom: 25px;
+        }
+
+        .vault-column-left {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .vault-column-right {
+            flex: 1.2;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dashboard-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        /* Scroll Area Container */
+        .vault-scroll-area {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-height: 290px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .vault-scroll-area::-webkit-scrollbar {
+            width: 6px;
+        }
+        .vault-scroll-area::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .vault-item { 
+            background: rgba(24, 25, 32, 0.75); 
+            padding: 16px 20px; 
+            border-radius: 10px; 
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: inset 0 1px 2px rgba(255,255,255,0.05);
+        }
+
+        .vault-item-header {
+            font-size: 1.2em;
+            color: #ffffff;
+            font-weight: bold;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .vault-item-fields {
+            font-family: monospace;
+            font-size: 0.95em;
+            color: #f1f3f4;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .card-action-row {
+            margin-top: 10px;
+        }
+
+        .btn-toggle-state {
+            padding: 7px 14px;
+            font-size: 0.85em;
+            border-radius: 5px;
+            font-weight: 500;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* Show Password is Yellow */
+        .btn-style-show {
+            background: #c9a435 !important; 
+            color: #ffffff !important;
+        }
+        .btn-style-show:hover {
+            background: #e1b93c !important;
+        }
+
+        /* Hide Password is Red */
+        .btn-style-hide {
+            background: #d9534f !important; 
+            color: #ffffff !important;
+        }
+        .btn-style-hide:hover {
+            background: #e4605c !important;
+        }
+
+        .vault-item-id {
+            margin-top: 8px;
+            font-size: 0.75em;
+            color: #80868b;
+        }
+
+        .vault-control-footer {
+            display: flex;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 20px;
+            margin-top: 5px;
+        }
+
+        .vault-control-footer button {
+            flex: 1;
+            padding: 10px;
+            font-size: 0.9em;
+        }
     </style>
 </head>
 <body>
 
 <div class="app-container">
-    <div id="authScreen">
-        <h2>Secure Vault Gateway</h2>
-        <p style="color: #aaa;">All cryptographic processes happen locally in your browser.</p>
-        
-        <label for="email">Email Address:</label>
-        <input type="email" id="email" placeholder="you@domain.com">
+    
+    <div id="authScreen" class="auth-box-size">
+        <h2>Sign in to BatSafe</h2>
+        <form id="authForm" autocomplete="off" onsubmit="return false;">
+            <div class="vertical-form-group">
+                <div class="input-wrapper">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" placeholder="you@domain.com" autocomplete="new-password">
+                    <div id="emailError" style="color: #d9534f; font-size: 0.8em; margin-top: 5px; display: none;">
+                        ❌ Please enter a valid email (e.g., name@domain.com)
+                    </div>
+                </div>
 
-        <label for="masterPassword">Master Password:</label>
-        <input type="password" id="masterPassword" placeholder="••••••••••••">
+                <div class="input-wrapper">
+                    <label for="masterPassword">Master Key</label>
+                    <input type="password" id="masterPassword" placeholder="combination" autocomplete="new-password">
+                    <div id="allFieldsError" style="color: #d9534f; font-size: 0.8em; margin-top: 5px; display: none;">
+                        ❌ Fill out all the fields
+                    </div>
+                </div>
 
-        <button id="btnUnlock">Unlock Local Vault</button>
+                <button id="btnUnlock" type="button">Unlock BatSafe</button>
+                
+                <div style="text-align: left; margin-top: 5px;">
+                    <button id="linkCreateAccount" class="link-btn" type="button">Create account</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div id="registerScreen" class="auth-box-size hidden">
+        <h2>Create BatSafe Account</h2>
+        <form id="registerForm" autocomplete="off" onsubmit="return false;">
+            <div class="vertical-form-group">
+                <div class="input-wrapper">
+                    <label for="regEmail">Email Address</label>
+                    <input type="email" id="regEmail" placeholder="you@domain.com" autocomplete="new-password">
+                    <div id="regEmailError" style="color: #d9534f; font-size: 0.8em; margin-top: 5px; display: none;">
+                        ❌ Please enter a valid email (e.g., name@domain.com)
+                    </div>
+                </div>
+
+                <div class="input-wrapper">
+                    <label for="regMasterPassword">Master Key</label>
+                    <input type="password" id="regMasterPassword" placeholder="combination" autocomplete="new-password">
+                    <div id="regAllFieldsError" style="color: #d9534f; font-size: 0.8em; margin-top: 5px; display: none;">
+                        ❌ Fill out all the fields
+                    </div>
+                </div>
+
+                <button id="btnRegisterSubmit" type="button">Register Vault</button>
+                
+                <div style="text-align: left; margin-top: 5px;">
+                    <button id="linkBackToLogin" class="link-btn" type="button">Back to Sign In</button>
+                </div>
+            </div>
+        </form>
     </div>
 
     <div id="vaultScreen" class="hidden">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h2>Your Secure Vault</h2>
-            <button id="btnLockApp" style="width: auto; padding: 8px 15px; background: #d9534f;">Lock Vault</button>
-        </div>
+        <h2>Your Secure Vault</h2>
         
-        <hr style="border-color: #333;">
+        <div class="vault-dashboard-layout">
+            
+            <div class="vault-column-left">
+                <h3>Main Headings</h3>
+                <div class="dashboard-inputs">
+                    <div class="input-wrapper">
+                        <label for="siteName">siteName</label>
+                        <input type="text" id="siteName" placeholder="">
+                    </div>
+                    
+                    <div class="input-wrapper">
+                        <label for="siteUsername">siteUsername</label>
+                        <input type="text" id="siteUsername" placeholder="">
+                    </div>
+                    
+                    <div class="input-wrapper">
+                        <label for="sitePassword">sitePassword</label>
+                        <input type="password" id="sitePassword" placeholder="">
+                    </div>
+                    
+                    <button id="btnAddItem" style="margin-top: 15px;">Add New Password Item</button>
+                </div>
+            </div>
 
-        <h3>Add New Password Item</h3>
-        <input type="text" id="siteName" placeholder="Site Name (e.g., Google, GitHub)">
-        <input type="text" id="siteUsername" placeholder="Username / Email">
-        <input type="password" id="sitePassword" placeholder="Account Password">
-        <button id="btnAddItem">Encrypt & Add to View</button>
+            <div class="vault-column-right">
+                <h3>Site Name</h3>
+                <div id="encryptedVaultDisplay" class="vault-scroll-area">
+                    </div>
+            </div>
 
-        <hr style="border-color: #333; margin: 20px 0;">
+        </div>
 
-        <h3>Your Synchronized Credentials</h3>
-        <div id="encryptedVaultDisplay">No items stored yet.</div>
+        <div class="vault-control-footer">
+            <button id="btnLockApp">Lock Vault</button>
+        </div>
     </div>
 </div>
 

@@ -2,6 +2,45 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
+
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
+
+// 1. Initialize or open the local database file
+const dbPath = path.join(__dirname, 'batsafe.db');
+const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+        console.error("Database initialization failed:", err.message);
+    } else {
+        console.log("Connected successfully to secure batsafe.db file.");
+    }
+});
+
+// 2. Build the database structure (Tables)
+db.serialize(() => {
+    // Table to keep track of user authentications
+    db.run(`
+        CREATE TABLE IF NOT EXISTS users (
+            email TEXT PRIMARY KEY,
+            authHash TEXT NOT NULL
+        )
+    `);
+
+    // Table to store local isolated encrypted vault records
+    db.run(`
+        CREATE TABLE IF NOT EXISTS vault_items (
+            id INTEGER PRIMARY KEY,
+            email TEXT NOT NULL,
+            label TEXT NOT NULL,
+            iv TEXT NOT NULL,
+            ciphertext TEXT NOT NULL,
+            FOREIGN KEY(email) REFERENCES users(email)
+        )
+    `);
+});
 
 // Middleware configurations
 app.use(cors());
@@ -11,84 +50,77 @@ app.use(express.static('public'));
 // Simulated Database Array (Temporary storage in server memory)
 const usersTable = [];
 
-// --- API ENDPOINT 1: USER REGISTRATION ---
+// --- SIGN UP ENDPOINT ---
 app.post('/api/register', (req, res) => {
     const { email, authHash } = req.body;
+    if (!email || !authHash) return res.status(400).json({ error: "Missing required fields." });
 
-    if (!email || !authHash) {
-        return res.status(400).json({ error: "Missing required fields." });
-    }
+    // Normalize email to lowercase to prevent salt mismatches from typos
+    const normalizedEmail = email.toLowerCase().trim();
 
-    // Check if user already exists
-    const userExists = usersTable.find(u => u.email === email);
-    if (userExists) {
-        return res.status(400).json({ error: "User already registered." });
-    }
-
-    // Store the credential profile
-    const newProfile = {
-        email: email,
-        serverAuthHash: authHash, // The derived string sent over the network
-        vaultItems: [] // Empty vault container initialized for the user
-    };
-
-    usersTable.push(newProfile);
-    console.log(`[SERVER REGISTRATION] New user created: ${email}`);
-    
-    return res.status(201).json({ message: "Account successfully created!" });
+    const sql = `INSERT INTO users (email, authHash) VALUES (?, ?)`;
+    db.run(sql, [normalizedEmail, authHash], function(err) {
+        if (err) {
+            if (err.message.includes("UNIQUE constraint failed")) {
+                return res.status(400).json({ error: "This account already exists." });
+            }
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ message: "Registration successful!" });
+    });
 });
 
-// --- API ENDPOINT 2: USER LOGIN ---
+// --- SIGN IN ENDPOINT ---
 app.post('/api/login', (req, res) => {
     const { email, authHash } = req.body;
+    if (!email || !authHash) return res.status(400).json({ error: "Missing required fields." });
 
-    if (!email || !authHash) {
-        return res.status(400).json({ error: "Missing fields." });
-    }
+    const normalizedEmail = email.toLowerCase().trim();
 
-    // Locate the user file record
-    const userRecord = usersTable.find(u => u.email === email);
-    if (!userRecord) {
-        return res.status(401).json({ error: "Invalid email or master password." });
-    }
+    db.get(`SELECT * FROM users WHERE email = ?`, [normalizedEmail], (err, user) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!user || user.authHash !== authHash) {
+            return res.status(401).json({ error: "Invalid email or master password." });
+        }
 
-    // Validate the incoming hash match against our recorded hash
-    if (userRecord.serverAuthHash === authHash) {
-        console.log(`[SERVER LOGIN] Authentication Successful for: ${email}`);
-        return res.status(200).json({ 
-            message: "Login successful!",
-            vault: userRecord.vaultItems // Return their encrypted data back to them
+        // Pull records cleanly
+        db.all(`SELECT id, label, iv, ciphertext FROM vault_items WHERE email = ?`, [normalizedEmail], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ message: "Access granted. Synchronizing vault...", vault: rows });
         });
-    } else {
-        return res.status(401).json({ error: "Invalid email or master password." });
-    }
+    });
 });
 
-// --- SYNC ENDPOINT: SAVE ENCRYPTED VAULT ITEM ---
+// --- SYNCHRONIZE NEW ITEM ENDPOINT ---
 app.post('/api/vault/add', (req, res) => {
-    try {
-        const { email, authHash, vaultItem } = req.body;
+    const { email, authHash, vaultItem } = req.body;
+    if (!email || !authHash || !vaultItem) return res.status(400).json({ error: "Missing payload data." });
 
-        if (!email || !authHash || !vaultItem) {
-            return res.status(400).json({ error: "Missing synchronization details." });
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Verify user credentials before modifying data
+    db.get(`SELECT * FROM users WHERE email = ?`, [normalizedEmail], (err, user) => {
+        if (err || !user || user.authHash !== authHash) {
+            return res.status(401).json({ error: "Unauthorized sync request rejected." });
         }
 
-        // Locate user profile record
-        const userRecord = usersTable.find(u => u.email === email);
-        if (!userRecord || userRecord.serverAuthHash !== authHash) {
-            return res.status(401).json({ error: "Authentication failed. Cannot sync data." });
-        }
-
-        // Push the client-side encrypted item safely into the user's vault database container
-        userRecord.vaultItems.push(vaultItem);
-        console.log(`[DATABASE SYNC] Added 1 encrypted item to vault for: ${email}`);
+        const sql = `INSERT INTO vault_items (id, email, label, iv, ciphertext) VALUES (?, ?, ?, ?, ?)`;
         
-        return res.status(200).json({ message: "Item synchronized securely to backend database!" });
-
-    } catch (error) {
-        console.error("[SERVER ERROR IN VAULT ADD]:", error);
-        return res.status(500).json({ error: "Internal Server Error during synchronization." });
-    }
+        // Ensure ID is passed cleanly as a number, and cryptographic strings remain untouched
+        db.run(sql, [
+            Number(vaultItem.id), 
+            normalizedEmail, 
+            vaultItem.label, 
+            String(vaultItem.iv), 
+            String(vaultItem.ciphertext)
+        ], (err) => {
+            if (err) {
+                console.error("Database Write Error:", err.message);
+                return res.status(500).json({ error: "Cloud sync database failure." });
+            }
+            res.json({ message: "Encrypted asset synchronized successfully." });
+        });
+    });
 });
 
 app.listen(PORT, () => {
