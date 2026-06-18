@@ -11,6 +11,7 @@ window.addEventListener('load', () => {
     inputs.forEach(id => {
         if (document.getElementById(id)) document.getElementById(id).value = "";
     });
+    clearErrors();
 });
 
 // --- BASE64 & BINARY UTILITIES ---
@@ -61,23 +62,69 @@ async function deriveVaultCredentials(email, password) {
     appState.userEmail = email;
 }
 
+// --- VISUAL VALIDATION ERROR ENGINE ---
+function clearErrors() {
+    const inputs = document.querySelectorAll('#authForm input, #registerForm input');
+    inputs.forEach(input => input.classList.remove('error-field'));
+
+    const errorDivs = ['emailError', 'allFieldsError', 'regEmailError', 'regAllFieldsError'];
+    errorDivs.forEach(id => {
+        const div = document.getElementById(id);
+        if (div) {
+            div.style.display = 'none';
+            div.textContent = div.textContent.replace('❌ ', '').trim();
+        }
+    });
+}
+
+// Custom error handling mapping
+function showInputError(inputElement, errorElement, message) {
+    if (inputElement) inputElement.classList.add('error-field');
+    if (errorElement) {
+        errorElement.textContent = "❌ " + message;
+        errorElement.style.display = "block";
+    }
+}
+
 // --- PANEL NAVIGATION ---
 document.getElementById('linkCreateAccount').addEventListener('click', () => {
+    clearErrors();
     document.getElementById('authScreen').classList.add('hidden');
     document.getElementById('registerScreen').classList.remove('hidden');
 });
 document.getElementById('linkBackToLogin').addEventListener('click', () => {
+    clearErrors();
     document.getElementById('registerScreen').classList.add('hidden');
     document.getElementById('authScreen').classList.remove('hidden');
 });
 
 // --- CORE FUNCTIONAL ACTIONS ---
 
-// 1. UNLOCK APPLICATION
+// 1. UNLOCK APPLICATION (SIGN IN)
 document.getElementById('btnUnlock').addEventListener('click', async () => {
-    const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('masterPassword').value;
-    if (!email || !password) return alert("Fill out all the fields");
+    clearErrors();
+
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('masterPassword');
+    const emailErrorDiv = document.getElementById('emailError');
+    const allFieldsErrorDiv = document.getElementById('allFieldsError');
+
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+
+    // --- PRIORITY 1: Check if fields are empty ---
+    if (!email || !password) {
+        showInputError(emailInput, null, "");
+        showInputError(passwordInput, allFieldsErrorDiv, "Fill out all the fields");
+        return;
+    }
+
+    // --- PRIORITY 2: Structure Email Form Format Check ---
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}(\.[a-zA-Z]{2,4})?$/;
+    if (!emailRegex.test(email)) {
+        showInputError(emailInput, emailErrorDiv, "Invalid email form");
+        return;
+    }
 
     try {
         await deriveVaultCredentials(email, password);
@@ -86,21 +133,56 @@ document.getElementById('btnUnlock').addEventListener('click', async () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: appState.userEmail, authHash: appState.serverAuthHash })
         });
+        
         let result = await response.json();
-        if (!response.ok) throw new Error(result.error);
+        
+        if (!response.ok) {
+            const serverMsg = (result.error || "").toLowerCase();
+            
+            // --- PRIORITY 3 & 4 CORRECTION ---
+            if (serverMsg.includes("master key") || serverMsg.includes("incorrect")) {
+                showInputError(passwordInput, allFieldsErrorDiv, "Incorrect Master Key for this account");
+            } 
+            else {
+                showInputError(emailInput, emailErrorDiv, "Account does not exist");
+            }
+            return;
+        }
 
         appState.simulatedDatabase = result.vault || [];
         await renderVaultItems();
         document.getElementById('authScreen').classList.add('hidden');
         document.getElementById('vaultScreen').classList.remove('hidden');
-    } catch (e) { alert("Error: " + e.message); }
+    } catch (e) { 
+        showInputError(passwordInput, allFieldsErrorDiv, "Connection failure to server."); 
+    }
 });
 
 // 2. CREATE ACCOUNT REGISTER BUTTON
 document.getElementById('btnRegisterSubmit').addEventListener('click', async () => {
-    const email = document.getElementById('regEmail').value.trim();
-    const password = document.getElementById('regMasterPassword').value;
-    if (!email || !password) return alert("Fill out all the fields");
+    clearErrors();
+
+    const emailInput = document.getElementById('regEmail');
+    const passwordInput = document.getElementById('regMasterPassword');
+    const emailErrorDiv = document.getElementById('regEmailError');
+    const allFieldsErrorDiv = document.getElementById('regAllFieldsError');
+
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+
+    // --- PRIORITY 1: Check empty fields ---
+    if (!email || !password) {
+        showInputError(emailInput, null, "");
+        showInputError(passwordInput, allFieldsErrorDiv, "Fill out all the fields");
+        return;
+    }
+
+    // --- PRIORITY 2: Structure Email Format Check ---
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}(\.[a-zA-Z]{2,4})?$/;
+    if (!emailRegex.test(email)) {
+        showInputError(emailInput, emailErrorDiv, "Invalid email form");
+        return;
+    }
 
     try {
         await deriveVaultCredentials(email, password);
@@ -110,12 +192,17 @@ document.getElementById('btnRegisterSubmit').addEventListener('click', async () 
             body: JSON.stringify({ email: appState.userEmail, authHash: appState.serverAuthHash })
         });
         let result = await response.json();
-        if (!response.ok) throw new Error(result.error);
+        
+        if (!response.ok) {
+            showInputError(emailInput, emailErrorDiv, result.error || "Registration failed");
+            return;
+        }
 
-        alert("Account created!");
         document.getElementById('registerScreen').classList.add('hidden');
         document.getElementById('authScreen').classList.remove('hidden');
-    } catch (e) { alert("Error: " + e.message); }
+    } catch (e) { 
+        showInputError(passwordInput, allFieldsErrorDiv, "Connection failure to server.");
+    }
 });
 
 // 3. ADD NEW PASSWORD ITEM BUTTON
@@ -155,7 +242,7 @@ document.getElementById('btnAddItem').addEventListener('click', async () => {
     } catch (e) { alert(e.message); }
 });
 
-// 4. RENDERING VAULT ENGINE (SWAPPED TOGGLE COLOR LOGIC)
+// 4. RENDERING VAULT ENGINE (WITH INSTANT INLINE DELETE BUTTON SUPPORT)
 async function renderVaultItems() {
     const display = document.getElementById('encryptedVaultDisplay');
     display.innerHTML = ""; 
@@ -175,18 +262,20 @@ async function renderVaultItems() {
                 <div class="user-row">[User: <span class="user-span">***********</span>]</div>
                 <div class="pass-row">[Pass: <span class="pass-span">***********</span>]</div>
             </div>
-            <div class="card-action-row">
-                <button class="btn-toggle-state btn-style-show" type="button">Show Password</button>
+            <div class="card-action-row" style="display: flex; gap: 10px;">
+                <button class="btn-toggle-state btn-style-show" type="button" style="flex: 2;">Show Password</button>
+                <button class="btn-delete-item btn-style-hide" type="button" style="flex: 1; padding: 7px; font-size: 0.85em; border-radius: 5px;">Delete</button>
             </div>
-            <div class="vault-item-id">Payload ID: ${item.id.toString(16).substring(0, 10)}</div>
+            <div class="vault-item-id" style="margin-top: 12px;">Payload ID: ${item.id.toString(16).substring(0, 10)}</div>
         `;
 
         const userSpan = itemBox.querySelector('.user-span');
         const passSpan = itemBox.querySelector('.pass-span');
         const btnToggle = itemBox.querySelector('.btn-toggle-state');
+        const btnDelete = itemBox.querySelector('.btn-delete-item');
 
+        // Toggle visibility handler
         btnToggle.addEventListener('click', async () => {
-            // IF CONCEALED -> DECRYPT AND SHOW (BUTTON MORPHS TO RED HIDE STATE)
             if (btnToggle.textContent === "Show Password") {
                 try {
                     const ciphertextBytes = base64ToUint8Array(item.ciphertext);
@@ -202,7 +291,6 @@ async function renderVaultItems() {
                     passSpan.textContent = credentials.password;
                     passSpan.style.color = "#ffff8d"; 
                     
-                    // Switch to Red "Hide Password" button state
                     btnToggle.textContent = "Hide Password";
                     btnToggle.classList.remove('btn-style-show');
                     btnToggle.classList.add('btn-style-hide');
@@ -210,16 +298,39 @@ async function renderVaultItems() {
                     alert("Decryption processing fault."); 
                 }
             } 
-            // IF EXPOSED -> CONCEAL AND COVER (BUTTON MORPHS TO YELLOW SHOW STATE)
             else {
                 userSpan.textContent = "***********";
                 passSpan.textContent = "***********";
                 passSpan.style.color = "";
                 
-                // Switch back to Yellow "Show Password" button state
                 btnToggle.textContent = "Show Password";
                 btnToggle.classList.remove('btn-style-hide');
                 btnToggle.classList.add('btn-style-show');
+            }
+        });
+
+        // Live Cloud Delete handler
+        btnDelete.addEventListener('click', async () => {
+            if (!confirm(`Are you sure you want to permanently delete "${item.label}"?`)) return;
+
+            try {
+                let response = await fetch('/api/vault/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        email: appState.userEmail, 
+                        authHash: appState.serverAuthHash, 
+                        itemId: Number(item.id) 
+                    })
+                });
+
+                if (!response.ok) throw new Error("Could not drop data asset from cloud storage.");
+
+                // Locally filter out the deleted row and re-render dashboard list UI instantly
+                appState.simulatedDatabase = appState.simulatedDatabase.filter(d => d.id !== item.id);
+                await renderVaultItems();
+            } catch (err) {
+                alert(err.message);
             }
         });
 
@@ -237,4 +348,5 @@ document.getElementById('btnLockApp').addEventListener('click', () => {
     document.getElementById('vaultScreen').classList.add('hidden');
     document.getElementById('authScreen').classList.remove('hidden');
     document.getElementById('encryptedVaultDisplay').innerText = "";
+    clearErrors();
 });

@@ -1,4 +1,14 @@
-require('dotenv').config();
+import 'dotenv/config'; 
+import express from 'express';
+import cors from 'cors';
+import pkg from 'pg';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const { Pool } = pkg;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,7 +40,6 @@ app.post('/api/register', async (req, res) => {
     const { email, authHash } = req.body;
     if (!email || !authHash) return res.status(400).json({ error: "Missing required fields." });
 
-    // Normalize email to lowercase to prevent salt mismatches from typos
     const normalizedEmail = email.toLowerCase().trim();
 
     try {
@@ -38,7 +47,7 @@ app.post('/api/register', async (req, res) => {
         await pool.query(sql, [normalizedEmail, authHash]);
         res.json({ message: "Registration successful!" });
     } catch (err) {
-        if (err.code === '23505') { // PostgreSQL unique constraint violation error code
+        if (err.code === '23505') { 
             return res.status(400).json({ error: "This account already exists." });
         }
         return res.status(500).json({ error: err.message });
@@ -56,17 +65,26 @@ app.post('/api/login', async (req, res) => {
         const userResult = await pool.query(`SELECT * FROM users WHERE email = $1`, [normalizedEmail]);
         const user = userResult.rows[0];
 
-        if (!user || user.auth_hash !== authHash) {
-            return res.status(401).json({ error: "Invalid email or master password." });
+        if (!user) {
+            return res.status(404).json({ error: "Account does not exist" });
         }
 
-        // Pull user records cleanly from cloud table matching profile email
-        const vaultResult = await pool.query(
-            `SELECT id, label, iv, ciphertext FROM vault_items WHERE user_email = $1`, 
-            [normalizedEmail]
-        );
+        if (user.auth_hash !== authHash) {
+            return res.status(401).json({ error: "Incorrect master key" });
+        }
+
+        let vaultRows = [];
+        try {
+            const vaultResult = await pool.query(
+                `SELECT id, label, iv, ciphertext FROM vault_items WHERE user_email = $1`, 
+                [normalizedEmail]
+            );
+            vaultRows = vaultResult.rows;
+        } catch (vaultErr) {
+            console.log("⚠️ vault_items table not created yet. Defaulting to empty vault array.");
+        }
         
-        res.json({ message: "Access granted. Synchronizing vault...", vault: vaultResult.rows });
+        res.json({ message: "Access granted. Synchronizing vault...", vault: vaultRows });
     } catch (err) {
         return res.status(500).json({ error: err.message });
     }
@@ -80,7 +98,6 @@ app.post('/api/vault/add', async (req, res) => {
     const normalizedEmail = email.toLowerCase().trim();
 
     try {
-        // Verify user credentials before modifying cloud storage data assets
         const userResult = await pool.query(`SELECT * FROM users WHERE email = $1`, [normalizedEmail]);
         const user = userResult.rows[0];
 
@@ -102,6 +119,33 @@ app.post('/api/vault/add', async (req, res) => {
     } catch (err) {
         console.error("Database Write Error:", err.message);
         return res.status(500).json({ error: "Cloud sync database failure." });
+    }
+});
+
+// --- REMOVE STORED VAULT CREDENTIAL ITEM ENDPOINT ---
+app.post('/api/vault/delete', async (req, res) => {
+    const { email, authHash, itemId } = req.body;
+    if (!email || !authHash || !itemId) return res.status(400).json({ error: "Missing parameters required to drop database record asset." });
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    try {
+        // Authenticate the deletion request before executing SQL commands
+        const userResult = await pool.query(`SELECT * FROM users WHERE email = $1`, [normalizedEmail]);
+        const user = userResult.rows[0];
+
+        if (!user || user.auth_hash !== authHash) {
+            return res.status(401).json({ error: "Unauthorized execution permission verification denied." });
+        }
+
+        // Secure conditional entry filtering so an authenticated account can only drop its OWN records
+        const deleteSql = `DELETE FROM vault_items WHERE id = $1 AND user_email = $2`;
+        await pool.query(deleteSql, [Number(itemId), normalizedEmail]);
+
+        res.json({ message: "Item purged from cloud storage table architecture successfully." });
+    } catch (err) {
+        console.error("Database deletion fault:", err.message);
+        return res.status(500).json({ error: "Internal cloud structural asset removal fault." });
     }
 });
 

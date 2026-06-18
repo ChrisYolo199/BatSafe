@@ -86,6 +86,13 @@
             outline: none;
             box-shadow: 0 0 8px rgba(201, 164, 53, 0.3);
         }
+
+        /* Custom class to turn text boxes red when validation fails */
+        .error-field {
+            border-color: #d9534f !important;
+            background-color: rgba(217, 83, 79, 0.15) !important;
+            box-shadow: 0 0 8px rgba(217, 83, 79, 0.2) !important;
+        }
         
         /* Main UI Buttons: Yellow with White Text */
         button { 
@@ -238,6 +245,55 @@
             padding: 10px;
             font-size: 0.9em;
         }
+
+        /* --- MOBILE RESPONSIVE ENGINE RULES --- */
+        @media screen and (max-width: 680px) {
+            body {
+                padding: 12px;
+                align-items: flex-start; /* Allows scrolling on tiny phone viewports safely */
+            }
+
+            .app-container {
+                padding: 24px 20px !important;
+                border-radius: 14px;
+            }
+
+            h2 {
+                font-size: 1.5em;
+                margin-bottom: 20px;
+            }
+
+            input {
+                font-size: 16px !important; /* Prevents mobile Safari / Android zoom shifts on focus */
+                padding: 12px;
+            }
+
+            button {
+                padding: 13px 15px !important;
+                font-size: 1em !important;
+            }
+
+            /* Transforms side-by-side layout columns into a seamless stacked mobile layout */
+            .vault-dashboard-layout {
+                flex-direction: column;
+                gap: 30px;
+            }
+
+            .vault-scroll-area {
+                max-height: 350px; /* Expands preview depth slightly on mobile screens */
+            }
+
+            /* Stack action options inside cards vertically so buttons are large thumb-targets */
+            .card-action-row {
+                flex-direction: column !important;
+                gap: 8px !important;
+            }
+
+            .card-action-row button {
+                width: 100% !important;
+                padding: 11px !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -252,7 +308,7 @@
                     <label for="email">Email Address</label>
                     <input type="email" id="email" placeholder="you@domain.com" autocomplete="new-password">
                     <div id="emailError" style="color: #d9534f; font-size: 0.8em; margin-top: 5px; display: none;">
-                        ❌ Please enter a valid email (e.g., name@domain.com)
+                        Invalid email form
                     </div>
                 </div>
 
@@ -260,7 +316,7 @@
                     <label for="masterPassword">Master Key</label>
                     <input type="password" id="masterPassword" placeholder="combination" autocomplete="new-password">
                     <div id="allFieldsError" style="color: #d9534f; font-size: 0.8em; margin-top: 5px; display: none;">
-                        ❌ Fill out all the fields
+                        Fill out all the fields
                     </div>
                 </div>
 
@@ -281,7 +337,7 @@
                     <label for="regEmail">Email Address</label>
                     <input type="email" id="regEmail" placeholder="you@domain.com" autocomplete="new-password">
                     <div id="regEmailError" style="color: #d9534f; font-size: 0.8em; margin-top: 5px; display: none;">
-                        ❌ Please enter a valid email (e.g., name@domain.com)
+                        Invalid email form
                     </div>
                 </div>
 
@@ -289,7 +345,7 @@
                     <label for="regMasterPassword">Master Key</label>
                     <input type="password" id="regMasterPassword" placeholder="combination" autocomplete="new-password">
                     <div id="regAllFieldsError" style="color: #d9534f; font-size: 0.8em; margin-top: 5px; display: none;">
-                        ❌ Fill out all the fields
+                        Fill out all the fields
                     </div>
                 </div>
 
@@ -332,7 +388,7 @@
             <div class="vault-column-right">
                 <h3>Site Name</h3>
                 <div id="encryptedVaultDisplay" class="vault-scroll-area">
-                    </div>
+                </div>
             </div>
 
         </div>
